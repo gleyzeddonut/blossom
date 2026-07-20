@@ -1,17 +1,23 @@
 """Native macOS (Cocoa) control window for the Orchid chord processor."""
 
+import subprocess
+import sys
+import threading
+
 import mido
 import objc
 from AppKit import (
     NSAlert, NSApplication, NSApplicationActivationPolicyRegular,
     NSBackingStoreBuffered, NSBezierPath, NSButton, NSColor, NSMakeRect,
-    NSPopUpButton, NSTextField, NSView, NSWindow, NSWindowStyleMaskClosable,
-    NSWindowStyleMaskMiniaturizable, NSWindowStyleMaskTitled,
+    NSMenu, NSMenuItem, NSPopUpButton, NSTextField, NSView, NSWindow,
+    NSWindowStyleMaskClosable, NSWindowStyleMaskMiniaturizable,
+    NSWindowStyleMaskTitled,
 )
 from Foundation import NSObject
 from PyObjCTools import AppHelper
 
 import settings
+import update
 from chords import ChordEngine, note_name, parse_note
 
 
@@ -250,6 +256,86 @@ class OrchidController(NSObject):
         alert.setInformativeText_(text)
         alert.runModal()
 
+    # -- settings & updates -------------------------------------------------
+
+    def openSettings_(self, sender):
+        if getattr(self, "settings_window", None) is None:
+            self._build_settings_window()
+        self.settings_window.makeKeyAndOrderFront_(None)
+        self._check_for_update()
+
+    @objc.python_method
+    def _build_settings_window(self):
+        style = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
+        win = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+            NSMakeRect(0, 0, 320, 150), style, NSBackingStoreBuffered, False)
+        win.setTitle_("Orchid Settings")
+        win.center()
+        win.setReleasedWhenClosed_(False)
+        content = win.contentView()
+        content.addSubview_(_label("Orchid version %s" % update.local_version(),
+                                   NSMakeRect(20, 104, 280, 20)))
+        self.update_status = _label("", NSMakeRect(20, 74, 280, 20))
+        content.addSubview_(self.update_status)
+        self.update_btn = NSButton.alloc().initWithFrame_(NSMakeRect(20, 28, 280, 32))
+        self.update_btn.setTitle_("Update")
+        self.update_btn.setBezelStyle_(1)
+        self.update_btn.setTarget_(self)
+        self.update_btn.setAction_("runUpdate:")
+        self.update_btn.setHidden_(True)
+        content.addSubview_(self.update_btn)
+        self.settings_window = win
+
+    @objc.python_method
+    def _check_for_update(self):
+        self.update_status.setStringValue_("Checking for updates…")
+        self.update_btn.setHidden_(True)
+
+        def worker():
+            remote = update.fetch_remote_version()
+            AppHelper.callAfter(self._update_check_done, remote)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    @objc.python_method
+    def _update_check_done(self, remote):
+        if remote is None:
+            self.update_status.setStringValue_("Could not check for updates (offline?).")
+        elif update.is_newer(remote, update.local_version()):
+            self.update_status.setStringValue_("Update available: %s" % remote)
+            self.update_btn.setTitle_("Update to %s" % remote)
+            self.update_btn.setHidden_(False)
+        else:
+            self.update_status.setStringValue_("You're up to date.")
+
+    def runUpdate_(self, sender):
+        self.update_btn.setEnabled_(False)
+        self.update_status.setStringValue_("Downloading update…")
+
+        def worker():
+            try:
+                update.download_update()
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "-r",
+                     str(update.UPDATE_DIR / "requirements.txt")],
+                    check=False, capture_output=True)
+                err = None
+            except OSError as exc:
+                err = str(exc)
+            AppHelper.callAfter(self._update_done, err)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    @objc.python_method
+    def _update_done(self, err):
+        self.update_btn.setEnabled_(True)
+        if err:
+            self.update_status.setStringValue_("Update failed: %s" % err)
+            return
+        self.update_btn.setHidden_(True)
+        self.update_status.setStringValue_("Updated — quit and reopen Orchid.")
+        self._alert("Update installed. Quit and reopen Orchid to use it.")
+
     # -- window delegate ----------------------------------------------------
 
     def windowWillClose_(self, notification):
@@ -257,10 +343,27 @@ class OrchidController(NSObject):
         AppHelper.stopEventLoop()
 
 
+def _build_menu(controller):
+    menubar = NSMenu.alloc().init()
+    app_item = NSMenuItem.alloc().init()
+    menubar.addItem_(app_item)
+    app_menu = NSMenu.alloc().init()
+    settings_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+        "Settings…", "openSettings:", ",")
+    settings_item.setTarget_(controller)
+    app_menu.addItem_(settings_item)
+    app_menu.addItem_(NSMenuItem.separatorItem())
+    app_menu.addItem_(NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+        "Quit Orchid", "terminate:", "q"))
+    app_item.setSubmenu_(app_menu)
+    return menubar
+
+
 def main():
     app = NSApplication.sharedApplication()
     app.setActivationPolicy_(NSApplicationActivationPolicyRegular)
-    controller = OrchidController.alloc().init()  # noqa: F841 (kept alive)
+    controller = OrchidController.alloc().init()
+    app.setMainMenu_(_build_menu(controller))
     app.activateIgnoringOtherApps_(True)
     AppHelper.runEventLoop()
 
