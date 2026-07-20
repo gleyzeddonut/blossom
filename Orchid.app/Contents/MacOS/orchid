@@ -1,0 +1,26 @@
+#!/bin/bash
+# Orchid launcher: the repo root is the directory containing this .app bundle.
+set -e
+REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$REPO"
+
+# Find a Python that has tkinter (Homebrew's usually doesn't; Apple's does).
+find_python() {
+    for p in /usr/bin/python3 "$(command -v python3 2>/dev/null)"; do
+        [ -n "$p" ] && [ -x "$p" ] && "$p" -c "import tkinter" >/dev/null 2>&1 && { echo "$p"; return 0; }
+    done
+    return 1
+}
+
+# (Re)build the venv if it is missing or its Python lacks tkinter.
+if ! .venv/bin/python -c "import tkinter" >/dev/null 2>&1; then
+    if ! PY="$(find_python)"; then
+        osascript -e 'display alert "Orchid" message "No Python with tkinter found. Install the Xcode Command Line Tools (run: xcode-select --install) and try again."'
+        exit 1
+    fi
+    rm -rf .venv
+    "$PY" -m venv .venv
+    .venv/bin/python -m pip install -r requirements.txt
+fi
+
+exec .venv/bin/python gui.py

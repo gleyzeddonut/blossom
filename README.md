@@ -9,7 +9,15 @@ is sent to your synth.
     python3 -m venv .venv
     .venv/bin/python -m pip install -r requirements.txt
 
-## Run
+## App
+
+Double-click `Orchid.app` to open the control window — pick your MIDI In/Out,
+hit Start, play. Ports and settings are remembered between launches. On a new
+machine the first launch builds the environment automatically (give it a
+minute) — and since the app is unsigned, use right-click → Open the first
+time if macOS complains.
+
+## Run (CLI)
 
     .venv/bin/python orchid.py                  # list MIDI ports
     .venv/bin/python orchid.py --in keystep --out "usb midi"
