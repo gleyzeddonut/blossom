@@ -175,21 +175,21 @@ def test_current_quality_tracks_held_modifiers():
 
 
 @pytest.mark.parametrize("num,name", [
-    (60, "C4"), (36, "C2"), (0, "C-1"), (127, "G8"), (61, "C#4"), (95, "B6"),
+    (60, "C4"), (36, "C2"), (0, "C-1"), (127, "G9"), (61, "C#4"), (95, "B6"),
 ])
 def test_note_name(num, name):
     assert note_name(num) == name
 
 
 @pytest.mark.parametrize("text,num", [
-    ("C4", 60), ("c2", 36), ("F#1", 42), ("Gb1", 42), ("C-1", 0), ("G8", 127),
+    ("C4", 60), ("c2", 36), ("F#1", 30), ("Gb1", 30), ("C-1", 0), ("G9", 127),
     ("36", 36), ("0", 0),
 ])
 def test_parse_note_accepts_names_and_integers(text, num):
     assert parse_note(text) == num
 
 
-@pytest.mark.parametrize("text", ["", "H2", "C", "4C", "C#", "G9", "C10", "-1", "128", "C##2", None])
+@pytest.mark.parametrize("text", ["", "H2", "C", "4C", "C#", "A9", "C10", "-1", "128", "C##2", None])
 def test_parse_note_rejects_garbage_and_out_of_range(text):
     assert parse_note(text) is None
 
