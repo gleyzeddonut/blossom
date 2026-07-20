@@ -11,18 +11,17 @@ is sent to your synth.
 
 ## App
 
-**Where to keep this folder:** anywhere *except* Documents, Desktop, or
-Downloads (and their iCloud equivalents). macOS privacy protection blocks
-unsigned apps from reading those folders, so the app cannot start there —
-your home folder (e.g. `~/orchid`) works great. The launcher will tell you
-if this is the problem. (Alternative: add Orchid.app to Full Disk Access in
-System Settings → Privacy & Security.)
+Double-click `Orchid.app` — it is fully self-contained and runs from
+anywhere (Documents, /Applications, wherever). Pick your MIDI In/Out, hit
+Start, play. The first launch on a machine builds the app's Python
+environment in `~/Library/Application Support/Orchid` (give it a minute);
+after that it opens instantly. Settings are remembered there too. No
+privacy permissions are needed.
 
-Double-click `Orchid.app` to open the control window — pick your MIDI In/Out,
-hit Start, play. Ports and settings are remembered between launches. On a new
-machine the first launch builds the environment automatically (give it a
-minute) — and since the app is unsigned, use right-click → Open the first
-time if macOS complains.
+To put it on another Mac, copy just `Orchid.app` (AirDrop or Finder copy
+keeps the code signature; after a plain `git clone`, run `./build_app.sh`
+once to assemble and sign the app). After changing any of the Python
+sources, run `./build_app.sh` to refresh the bundle.
 
 ## Run (CLI)
 
