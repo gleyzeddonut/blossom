@@ -4,9 +4,9 @@ import mido
 import objc
 from AppKit import (
     NSAlert, NSApplication, NSApplicationActivationPolicyRegular,
-    NSBackingStoreBuffered, NSButton, NSMakeRect, NSPopUpButton, NSTextField,
-    NSWindow, NSWindowStyleMaskClosable, NSWindowStyleMaskMiniaturizable,
-    NSWindowStyleMaskTitled,
+    NSBackingStoreBuffered, NSBezierPath, NSButton, NSColor, NSMakeRect,
+    NSPopUpButton, NSTextField, NSView, NSWindow, NSWindowStyleMaskClosable,
+    NSWindowStyleMaskMiniaturizable, NSWindowStyleMaskTitled,
 )
 from Foundation import NSObject
 from PyObjCTools import AppHelper
@@ -42,6 +42,53 @@ def _label(text, frame):
     return field
 
 
+PIANO_LOW, PIANO_HIGH = 24, 96          # C1 .. C7
+_WHITE_PCS = {0, 2, 4, 5, 7, 9, 11}     # pitch classes drawn as white keys
+
+
+class PianoView(NSView):
+    def initWithFrame_(self, frame):
+        self = objc.super(PianoView, self).initWithFrame_(frame)
+        if self is None:
+            return None
+        self.sounding = set()
+        return self
+
+    @objc.python_method
+    def set_sounding(self, notes):
+        self.sounding = {n for n in notes if PIANO_LOW <= n <= PIANO_HIGH}
+        self.setNeedsDisplay_(True)
+
+    def drawRect_(self, rect):
+        bounds = self.bounds()
+        width, height = bounds.size.width, bounds.size.height
+        NSColor.grayColor().set()
+        NSBezierPath.fillRect_(bounds)
+        whites = [n for n in range(PIANO_LOW, PIANO_HIGH + 1)
+                  if n % 12 in _WHITE_PCS]
+        key_w = width / len(whites)
+        white_x = {}
+        x = 0.0
+        for n in whites:
+            white_x[n] = x
+            if n in self.sounding:
+                NSColor.systemBlueColor().set()
+            else:
+                NSColor.whiteColor().set()
+            NSBezierPath.fillRect_(NSMakeRect(x + 0.5, 0.5, key_w - 1, height - 1))
+            x += key_w
+        black_w, black_h = key_w * 0.6, height * 0.6
+        for n in range(PIANO_LOW, PIANO_HIGH + 1):
+            if n % 12 in _WHITE_PCS:
+                continue
+            bx = white_x[n - 1] + key_w - black_w / 2
+            if n in self.sounding:
+                NSColor.systemBlueColor().set()
+            else:
+                NSColor.blackColor().set()
+            NSBezierPath.fillRect_(NSMakeRect(bx, height - black_h, black_w, black_h))
+
+
 class OrchidController(NSObject):
     def init(self):
         self = objc.super(OrchidController, self).init()
@@ -61,48 +108,51 @@ class OrchidController(NSObject):
         style = (NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
                  | NSWindowStyleMaskMiniaturizable)
         self.window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
-            NSMakeRect(0, 0, 400, 240), style, NSBackingStoreBuffered, False)
+            NSMakeRect(0, 0, 420, 330), style, NSBackingStoreBuffered, False)
         self.window.setTitle_("Orchid")
         self.window.center()
         content = self.window.contentView()
 
-        content.addSubview_(_label("MIDI In", NSMakeRect(20, 196, 76, 20)))
+        content.addSubview_(_label("MIDI In", NSMakeRect(20, 288, 76, 20)))
         self.in_pop = NSPopUpButton.alloc().initWithFrame_(
-            NSMakeRect(100, 192, 280, 26))
+            NSMakeRect(100, 284, 300, 26))
         content.addSubview_(self.in_pop)
 
-        content.addSubview_(_label("MIDI Out", NSMakeRect(20, 162, 76, 20)))
+        content.addSubview_(_label("MIDI Out", NSMakeRect(20, 254, 76, 20)))
         self.out_pop = NSPopUpButton.alloc().initWithFrame_(
-            NSMakeRect(100, 158, 280, 26))
+            NSMakeRect(100, 250, 300, 26))
         content.addSubview_(self.out_pop)
 
-        refresh = NSButton.alloc().initWithFrame_(NSMakeRect(96, 124, 100, 28))
+        refresh = NSButton.alloc().initWithFrame_(NSMakeRect(96, 216, 100, 28))
         refresh.setTitle_("Refresh")
         refresh.setBezelStyle_(1)  # rounded push button
         refresh.setTarget_(self)
         refresh.setAction_("refreshPorts:")
         content.addSubview_(refresh)
 
-        content.addSubview_(_label("Base note", NSMakeRect(20, 94, 76, 20)))
+        content.addSubview_(_label("Base note", NSMakeRect(20, 186, 76, 20)))
         self.base_field = NSTextField.alloc().initWithFrame_(
-            NSMakeRect(100, 90, 60, 24))
+            NSMakeRect(100, 182, 60, 24))
         content.addSubview_(self.base_field)
 
-        content.addSubview_(_label("Channel", NSMakeRect(185, 94, 64, 20)))
+        content.addSubview_(_label("Channel", NSMakeRect(185, 186, 64, 20)))
         self.channel_field = NSTextField.alloc().initWithFrame_(
-            NSMakeRect(250, 90, 60, 24))
+            NSMakeRect(250, 182, 60, 24))
         content.addSubview_(self.channel_field)
 
         self.toggle_btn = NSButton.alloc().initWithFrame_(
-            NSMakeRect(20, 50, 360, 32))
+            NSMakeRect(20, 142, 380, 32))
         self.toggle_btn.setTitle_("Start")
         self.toggle_btn.setBezelStyle_(1)
         self.toggle_btn.setTarget_(self)
         self.toggle_btn.setAction_("toggle:")
         content.addSubview_(self.toggle_btn)
 
-        self.status = _label("stopped", NSMakeRect(20, 16, 360, 20))
+        self.status = _label("stopped", NSMakeRect(20, 116, 380, 20))
         content.addSubview_(self.status)
+
+        self.piano = PianoView.alloc().initWithFrame_(NSMakeRect(20, 16, 380, 88))
+        content.addSubview_(self.piano)
 
         self.window.setDelegate_(self)
         self.window.makeKeyAndOrderFront_(None)
@@ -166,13 +216,19 @@ class OrchidController(NSObject):
             outport.send(out)
         quality = engine.current_quality
         text = "running — %s" % quality if quality else "running"
-        AppHelper.callAfter(self.status.setStringValue_, text)
+        AppHelper.callAfter(self._update_ui, text, engine.sounding_notes)
+
+    @objc.python_method
+    def _update_ui(self, text, notes):
+        self.status.setStringValue_(text)
+        self.piano.set_sounding(notes)
 
     @objc.python_method
     def _stop(self):
         self._close_ports()
         self.toggle_btn.setTitle_("Start")
         self.status.setStringValue_("stopped")
+        self.piano.set_sounding([])
 
     @objc.python_method
     def _close_ports(self):
