@@ -40,15 +40,26 @@ class ChordEngine:
                     self._held_modifiers.append(offset)
                 return []
             return self._press(msg.note, msg.velocity)
+        if msg.type == "note_off":
+            if self._in_zone(msg.note):
+                offset = msg.note - self.zone_base
+                if offset in self._held_modifiers:
+                    self._held_modifiers.remove(offset)
+                return []
+            return []
         return []
 
     def _in_zone(self, note):
         return self.zone_base <= note < self.zone_base + 12
 
     def _press(self, root, velocity):
-        intervals = self.chord_map[self._held_modifiers[-1]]
+        if self._held_modifiers:
+            intervals = self.chord_map[self._held_modifiers[-1]]
+            notes = [root + i for i in intervals]
+        else:
+            notes = [root]
         return [
-            mido.Message("note_on", note=root + i, velocity=velocity,
+            mido.Message("note_on", note=note, velocity=velocity,
                          channel=self.channel)
-            for i in intervals
+            for note in notes
         ]

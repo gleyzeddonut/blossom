@@ -48,3 +48,38 @@ def test_chord_sent_on_engine_channel():
     engine.process(on(36))
     out = engine.process(on(60))
     assert out == [on(60, channel=3), on(64, channel=3), on(67, channel=3)]
+
+
+def test_no_modifier_passes_single_note_through():
+    engine = ChordEngine()
+    assert engine.process(on(60, velocity=80)) == [on(60, velocity=80)]
+
+
+def test_modifier_keys_are_consumed_silently():
+    engine = ChordEngine()
+    assert engine.process(on(36)) == []       # assigned modifier
+    assert engine.process(on(46)) == []       # unassigned zone key (A#)
+    assert engine.process(off(36)) == []
+    assert engine.process(off(46)) == []
+
+
+def test_most_recent_modifier_wins():
+    engine = ChordEngine()
+    engine.process(on(36))                    # major
+    engine.process(on(37))                    # then minor
+    assert engine.process(on(60)) == [on(60), on(63), on(67)]
+
+
+def test_releasing_newest_modifier_falls_back():
+    engine = ChordEngine()
+    engine.process(on(36))                    # major
+    engine.process(on(37))                    # minor on top
+    engine.process(off(37))                   # release minor
+    assert engine.process(on(60)) == [on(60), on(64), on(67)]
+
+
+def test_releasing_all_modifiers_restores_passthrough():
+    engine = ChordEngine()
+    engine.process(on(36))
+    engine.process(off(36))
+    assert engine.process(on(60)) == [on(60)]
