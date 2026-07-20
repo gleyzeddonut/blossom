@@ -16,15 +16,25 @@ def test_missing_ports_rejected(in_port, out_port):
     assert config is None and "port" in err
 
 
-def test_non_numeric_fields_rejected():
-    config, err = validate_config("a", "b", "abc", "1")
-    assert config is None and "numbers" in err
+def test_note_name_base_accepted():
+    config, err = validate_config("a", "b", "C2", "1")
+    assert err is None and config["base"] == 36
 
 
-@pytest.mark.parametrize("base", ["-1", "117"])
+def test_bad_base_rejected():
+    config, err = validate_config("a", "b", "H7", "1")
+    assert config is None and "C-1" in err
+
+
+@pytest.mark.parametrize("base", ["A9", "117", "C-2"])
 def test_base_out_of_range_rejected(base):
     config, err = validate_config("a", "b", base, "1")
-    assert config is None and "0-116" in err
+    assert config is None and "C-1" in err
+
+
+def test_non_numeric_channel_rejected():
+    config, err = validate_config("a", "b", "C2", "x")
+    assert config is None and "Channel" in err
 
 
 @pytest.mark.parametrize("channel", ["0", "17"])

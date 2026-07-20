@@ -12,22 +12,22 @@ from Foundation import NSObject
 from PyObjCTools import AppHelper
 
 import settings
-from chords import ChordEngine
+from chords import ChordEngine, note_name, parse_note
 
 
 def validate_config(in_port, out_port, base_text, channel_text):
     """Return (config, None) if inputs are usable, else (None, error message)."""
     if not in_port or not out_port:
         return None, "Pick both a MIDI In and MIDI Out port."
+    base = parse_note(base_text)
+    if base is None or not 0 <= base <= 116:
+        return None, "Base note must be a note between C-1 and G#8 (like C2)."
     try:
-        base = int(str(base_text))
         channel = int(str(channel_text))
     except ValueError:
-        return None, "Base note and channel must be numbers."
-    if not 0 <= base <= 116:
-        return None, "Base note must be 0-116."
+        return None, "Channel must be a number 1-16."
     if not 1 <= channel <= 16:
-        return None, "Channel must be 1-16."
+        return None, "Channel must be a number 1-16."
     return {"in_port": in_port, "out_port": out_port,
             "base": base, "channel": channel}, None
 
@@ -110,7 +110,7 @@ class OrchidController(NSObject):
     @objc.python_method
     def _load_settings(self):
         stored = settings.load()
-        self.base_field.setStringValue_(str(stored["base"]))
+        self.base_field.setStringValue_(note_name(stored["base"]))
         self.channel_field.setStringValue_(str(stored["channel"]))
         self.refreshPorts_(None)
         if stored["in_port"] in list(self.in_pop.itemTitles()):
