@@ -27,3 +27,13 @@ def test_load_ignores_unknown_keys_and_fills_missing(tmp_path):
     assert loaded["in_port"] == "KeyStep"
     assert loaded["base"] == settings.DEFAULTS["base"]
     assert "bogus" not in loaded
+
+
+def test_save_creates_missing_parent_directories(tmp_path):
+    path = tmp_path / "nested" / "deeper" / "settings.json"
+    settings.save({"in_port": "x"}, path)
+    assert settings.load(path)["in_port"] == "x"
+
+
+def test_default_path_is_in_application_support():
+    assert "Application Support/Orchid" in str(settings.SETTINGS_PATH)

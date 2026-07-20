@@ -3,7 +3,8 @@
 import json
 from pathlib import Path
 
-SETTINGS_PATH = Path(__file__).resolve().parent / "settings.json"
+SETTINGS_PATH = (Path.home() / "Library" / "Application Support" / "Orchid"
+                 / "settings.json")
 DEFAULTS = {"in_port": "", "out_port": "", "base": 36, "channel": 1}
 
 
@@ -20,4 +21,6 @@ def load(path=SETTINGS_PATH):
 
 
 def save(values, path=SETTINGS_PATH):
-    Path(path).write_text(json.dumps(values, indent=2))
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(values, indent=2))
