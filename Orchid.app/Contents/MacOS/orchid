@@ -52,6 +52,21 @@ if ! "$VENV/bin/python" -c "import mido, rtmidi, AppKit" >>"$LOG" 2>&1; then
     fi
 fi
 
-echo "launching gui.py" >>"$LOG"
-cd "$RES"
-exec "$VENV/bin/python" "$RES/gui.py" 2>>"$LOG"
+# Run from the downloaded update if it is strictly newer than the bundle.
+APP_CODE="$RES"
+OVERRIDE="$APPDIR/app"
+if [ -f "$OVERRIDE/VERSION" ] && [ -f "$OVERRIDE/gui.py" ]; then
+    if "$VENV/bin/python" -c '
+import sys
+def v(path):
+    try:
+        return tuple(int(x) for x in open(path + "/VERSION").read().strip().split("."))
+    except Exception:
+        return (0,)
+sys.exit(0 if v(sys.argv[1]) > v(sys.argv[2]) else 1)' "$OVERRIDE" "$RES"; then
+        APP_CODE="$OVERRIDE"
+    fi
+fi
+echo "launching gui.py from $APP_CODE" >>"$LOG"
+cd "$APP_CODE"
+exec "$VENV/bin/python" "$APP_CODE/gui.py" 2>>"$LOG"
