@@ -137,3 +137,21 @@ def test_flush_releases_everything_and_resets():
     engine.process(on(72))
     assert engine.flush() == [off(60), off(64), off(67), off(72), off(76), off(79)]
     assert engine.flush() == []
+
+
+def test_chord_tones_above_127_are_dropped():
+    engine = ChordEngine()
+    engine.process(on(36 + 9))                # add9: 0 4 7 14
+    out = engine.process(on(120))             # 134 is out of range
+    assert out == [on(120), on(124), on(127)]
+    assert engine.process(off(120)) == [off(120), off(124), off(127)]
+
+
+def test_non_note_messages_pass_through_unchanged():
+    engine = ChordEngine()
+    bend = mido.Message("pitchwheel", pitch=2000, channel=0)
+    cc = mido.Message("control_change", control=1, value=64, channel=0)
+    touch = mido.Message("aftertouch", value=50, channel=0)
+    prog = mido.Message("program_change", program=5, channel=0)
+    for msg in (bend, cc, touch, prog):
+        assert engine.process(msg) == [msg]

@@ -52,7 +52,7 @@ class ChordEngine:
                     self._held_modifiers.remove(offset)
                 return []
             return self._release(msg.note)
-        return []
+        return [msg]
 
     def _in_zone(self, note):
         return self.zone_base <= note < self.zone_base + 12
@@ -63,7 +63,7 @@ class ChordEngine:
             out.extend(self._release(root))
         if self._held_modifiers:
             intervals = self.chord_map[self._held_modifiers[-1]]
-            notes = [root + i for i in intervals]
+            notes = [root + i for i in intervals if root + i <= 127]
         else:
             notes = [root]
         self._active[root] = notes
