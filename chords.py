@@ -1,5 +1,7 @@
 """Pure chord logic for the Orchid-style MIDI processor. No MIDI I/O here."""
 
+import re
+
 import mido
 
 # Bottom key of the modifier zone (C2 by default); the zone spans 12 keys.
@@ -24,6 +26,32 @@ CHORD_NAMES = {
     0: "major", 1: "minor", 2: "maj7", 3: "min7", 4: "dom7",
     5: "sus4", 6: "sus2", 7: "dim", 8: "aug", 9: "add9",
 }
+
+NOTE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+_ACCIDENTALS = {"": 0, "#": 1, "b": -1}
+_NOTE_RE = re.compile(r"^([A-Ga-g])([#b]?)(-?\d+)$")
+
+
+def note_name(n):
+    """Scientific pitch name for a MIDI note number (60 -> 'C4')."""
+    return "%s%d" % (NOTE_NAMES[n % 12], n // 12 - 1)
+
+
+def parse_note(text):
+    """MIDI number for 'C4' / 'Gb1' / '60' style input; None if invalid."""
+    if text is None:
+        return None
+    text = str(text).strip()
+    if re.fullmatch(r"\d+", text):
+        num = int(text)
+        return num if num <= 127 else None
+    match = _NOTE_RE.match(text)
+    if not match:
+        return None
+    letter, accidental, octave = match.groups()
+    semitone = NOTE_NAMES.index(letter.upper())
+    num = semitone + _ACCIDENTALS[accidental] + (int(octave) + 1) * 12
+    return num if 0 <= num <= 127 else None
 
 
 class ChordEngine:
@@ -66,6 +94,11 @@ class ChordEngine:
         if self._held_modifiers:
             return CHORD_NAMES.get(self._held_modifiers[-1])
         return None
+
+    @property
+    def sounding_notes(self):
+        """Sorted pitches currently sounding at the output."""
+        return sorted(self._counts)
 
     def _in_zone(self, note):
         return self.zone_base <= note < self.zone_base + 12
