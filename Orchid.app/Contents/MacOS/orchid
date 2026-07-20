@@ -14,10 +14,10 @@ VENV="$APPDIR/venv"
 
 BLOCKED=0
 
-# probe <python>: succeeds if it can import tkinter; notes TCC denials.
+# probe <python>: succeeds if it runs at all; notes TCC denials.
 probe() {
     local out
-    out="$("$1" -c "import tkinter" 2>&1)" && return 0
+    out="$("$1" -c "pass" 2>&1)" && return 0
     echo "probe $1 failed: $out" >>"$LOG"
     case "$out" in *"Operation not permitted"*) BLOCKED=1 ;; esac
     return 1
@@ -25,7 +25,7 @@ probe() {
 
 alert() { osascript -e "display alert \"Orchid\" message \"$1\""; }
 
-if ! "$VENV/bin/python" -c "import tkinter, mido, rtmidi" >>"$LOG" 2>&1; then
+if ! "$VENV/bin/python" -c "import mido, rtmidi, AppKit" >>"$LOG" 2>&1; then
     echo "venv unusable; (re)building" >>"$LOG"
     PY=""
     for p in /usr/bin/python3 "$(command -v python3 2>/dev/null)"; do
@@ -38,7 +38,7 @@ if ! "$VENV/bin/python" -c "import tkinter, mido, rtmidi" >>"$LOG" 2>&1; then
         if [ "$BLOCKED" = 1 ]; then
             alert "macOS is blocking Orchid from reading files it needs. Details: $LOG"
         else
-            alert "No Python with tkinter found. Install the Xcode Command Line Tools (run: xcode-select --install) and try again. Details: $LOG"
+            alert "No usable Python 3 found. Install the Xcode Command Line Tools (run: xcode-select --install) and try again. Details: $LOG"
         fi
         exit 1
     fi
@@ -46,7 +46,7 @@ if ! "$VENV/bin/python" -c "import tkinter, mido, rtmidi" >>"$LOG" 2>&1; then
     mkdir -p "$APPDIR"
     "$PY" -m venv "$VENV" >>"$LOG" 2>&1
     "$VENV/bin/python" -m pip install -r "$RES/requirements.txt" >>"$LOG" 2>&1
-    if ! "$VENV/bin/python" -c "import tkinter, mido, rtmidi" >>"$LOG" 2>&1; then
+    if ! "$VENV/bin/python" -c "import mido, rtmidi, AppKit" >>"$LOG" 2>&1; then
         alert "Orchid could not set up its Python environment. Details: $LOG"
         exit 1
     fi
