@@ -1,7 +1,7 @@
 import mido
 import pytest
 
-from chords import ChordEngine
+from chords import CHORD_MAP, CHORD_NAMES, ChordEngine
 
 
 def on(note, velocity=100, channel=0):
@@ -155,3 +155,20 @@ def test_non_note_messages_pass_through_unchanged():
     prog = mido.Message("program_change", program=5, channel=0)
     for msg in (bend, cc, touch, prog):
         assert engine.process(msg) == [msg]
+
+
+def test_every_chord_has_a_name():
+    assert set(CHORD_NAMES) == set(CHORD_MAP)
+
+
+def test_current_quality_tracks_held_modifiers():
+    engine = ChordEngine()
+    assert engine.current_quality is None
+    engine.process(on(36))
+    assert engine.current_quality == "major"
+    engine.process(on(37))
+    assert engine.current_quality == "minor"
+    engine.process(off(37))
+    assert engine.current_quality == "major"
+    engine.process(off(36))
+    assert engine.current_quality is None

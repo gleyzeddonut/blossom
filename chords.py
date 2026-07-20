@@ -19,6 +19,12 @@ CHORD_MAP = {
     9: (0, 4, 7, 14),    # A  add9
 }
 
+# Display names for the qualities in CHORD_MAP, keyed by the same offsets.
+CHORD_NAMES = {
+    0: "major", 1: "minor", 2: "maj7", 3: "min7", 4: "dom7",
+    5: "sus4", 6: "sus2", 7: "dim", 8: "aug", 9: "add9",
+}
+
 
 class ChordEngine:
     """Stateful message transformer: feed it mido messages, send what it returns."""
@@ -53,6 +59,13 @@ class ChordEngine:
                 return []
             return self._release(msg.note)
         return [msg]
+
+    @property
+    def current_quality(self):
+        """Name of the newest held modifier's quality, or None in passthrough."""
+        if self._held_modifiers:
+            return CHORD_NAMES.get(self._held_modifiers[-1])
+        return None
 
     def _in_zone(self, note):
         return self.zone_base <= note < self.zone_base + 12
