@@ -1,26 +1,51 @@
 #!/bin/bash
 # Orchid launcher: the repo root is the directory containing this .app bundle.
-set -e
+LOG=/tmp/orchid-launch.log
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
-cd "$REPO"
+{
+    echo "=== launch $(date) ==="
+    echo "repo: $REPO"
+} >>"$LOG" 2>&1
+cd "$REPO" || exit 1
 
-# Find a Python that has tkinter (Homebrew's usually doesn't; Apple's does).
-find_python() {
-    for p in /usr/bin/python3 "$(command -v python3 2>/dev/null)"; do
-        [ -n "$p" ] && [ -x "$p" ] && "$p" -c "import tkinter" >/dev/null 2>&1 && { echo "$p"; return 0; }
-    done
+BLOCKED=0
+
+# probe <python>: succeeds if it can import tkinter; notes TCC denials.
+probe() {
+    local out
+    out="$("$1" -c "import tkinter" 2>&1)" && return 0
+    echo "probe $1 failed: $out" >>"$LOG"
+    case "$out" in *"Operation not permitted"*) BLOCKED=1 ;; esac
     return 1
 }
 
-# (Re)build the venv if it is missing or its Python lacks tkinter.
-if ! .venv/bin/python -c "import tkinter" >/dev/null 2>&1; then
-    if ! PY="$(find_python)"; then
-        osascript -e 'display alert "Orchid" message "No Python with tkinter found. Install the Xcode Command Line Tools (run: xcode-select --install) and try again."'
+alert() { osascript -e "display alert \"Orchid\" message \"$1\""; }
+
+if ! probe .venv/bin/python; then
+    PY=""
+    for p in /usr/bin/python3 "$(command -v python3 2>/dev/null)"; do
+        if [ -n "$p" ] && [ -x "$p" ] && probe "$p"; then
+            PY="$p"
+            break
+        fi
+    done
+    if [ -z "$PY" ]; then
+        if [ "$BLOCKED" = 1 ]; then
+            alert "macOS is blocking Orchid from reading its own folder ($REPO). Documents, Desktop and Downloads are privacy-protected, and unsigned apps cannot ask for access. Fix: move the whole orchid folder somewhere else (for example your home folder), or add Orchid.app to Full Disk Access in System Settings > Privacy & Security. Details: $LOG"
+        else
+            alert "No Python with tkinter found. Install the Xcode Command Line Tools (run: xcode-select --install) and try again. Details: $LOG"
+        fi
         exit 1
     fi
+    echo "rebuilding venv with $PY" >>"$LOG"
     rm -rf .venv
-    "$PY" -m venv .venv
-    .venv/bin/python -m pip install -r requirements.txt
+    "$PY" -m venv .venv >>"$LOG" 2>&1
+    .venv/bin/python -m pip install -r requirements.txt >>"$LOG" 2>&1
+    if ! .venv/bin/python -c "import mido, rtmidi, tkinter" >>"$LOG" 2>&1; then
+        alert "Orchid could not finish setting up its Python environment. Details: $LOG"
+        exit 1
+    fi
 fi
 
-exec .venv/bin/python gui.py
+echo "launching gui.py" >>"$LOG"
+exec .venv/bin/python gui.py 2>>"$LOG"

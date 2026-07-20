@@ -11,6 +11,13 @@ is sent to your synth.
 
 ## App
 
+**Where to keep this folder:** anywhere *except* Documents, Desktop, or
+Downloads (and their iCloud equivalents). macOS privacy protection blocks
+unsigned apps from reading those folders, so the app cannot start there —
+your home folder (e.g. `~/orchid`) works great. The launcher will tell you
+if this is the problem. (Alternative: add Orchid.app to Full Disk Access in
+System Settings → Privacy & Security.)
+
 Double-click `Orchid.app` to open the control window — pick your MIDI In/Out,
 hit Start, play. Ports and settings are remembered between launches. On a new
 machine the first launch builds the environment automatically (give it a
