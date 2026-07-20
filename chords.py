@@ -28,9 +28,14 @@ class ChordEngine:
         self.chord_map = CHORD_MAP if chord_map is None else chord_map
         self.channel = channel
         self._held_modifiers = []  # zone offsets, oldest first; last one wins
+        self._active = {}   # root note -> list of pitches emitted for it
+        self._counts = {}   # pitch -> number of active roots sounding it
 
     def process(self, msg):
         """Return the list of messages to send for one incoming message."""
+        if msg.type == "note_on" and msg.velocity == 0:
+            msg = mido.Message("note_off", note=msg.note, velocity=0,
+                               channel=msg.channel)
         if msg.type == "note_on":
             if self._in_zone(msg.note):
                 offset = msg.note - self.zone_base
@@ -46,20 +51,49 @@ class ChordEngine:
                 if offset in self._held_modifiers:
                     self._held_modifiers.remove(offset)
                 return []
-            return []
+            return self._release(msg.note)
         return []
 
     def _in_zone(self, note):
         return self.zone_base <= note < self.zone_base + 12
 
     def _press(self, root, velocity):
+        out = []
+        if root in self._active:
+            out.extend(self._release(root))
         if self._held_modifiers:
             intervals = self.chord_map[self._held_modifiers[-1]]
             notes = [root + i for i in intervals]
         else:
             notes = [root]
-        return [
-            mido.Message("note_on", note=note, velocity=velocity,
-                         channel=self.channel)
-            for note in notes
-        ]
+        self._active[root] = notes
+        for note in notes:
+            self._counts[note] = self._counts.get(note, 0) + 1
+            if self._counts[note] == 1:
+                out.append(self._note_on(note, velocity))
+        return out
+
+    def _release(self, root):
+        out = []
+        for note in self._active.pop(root, [root]):
+            remaining = self._counts.pop(note, 0) - 1
+            if remaining > 0:
+                self._counts[note] = remaining
+            else:
+                out.append(self._note_off(note))
+        return out
+
+    def flush(self):
+        """Note-offs for everything sounding; call before exit to avoid stuck notes."""
+        out = [self._note_off(note) for note in sorted(self._counts)]
+        self._active.clear()
+        self._counts.clear()
+        return out
+
+    def _note_on(self, note, velocity):
+        return mido.Message("note_on", note=note, velocity=velocity,
+                            channel=self.channel)
+
+    def _note_off(self, note):
+        return mido.Message("note_off", note=note, velocity=0,
+                            channel=self.channel)

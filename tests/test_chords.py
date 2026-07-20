@@ -83,3 +83,57 @@ def test_releasing_all_modifiers_restores_passthrough():
     engine.process(on(36))
     engine.process(off(36))
     assert engine.process(on(60)) == [on(60)]
+
+
+def test_note_off_releases_chord_even_after_modifier_released():
+    engine = ChordEngine()
+    engine.process(on(36))                    # major
+    engine.process(on(60))                    # C major sounding
+    engine.process(off(36))                   # let go of modifier first
+    out = engine.process(off(60))
+    assert out == [off(60), off(64), off(67)]
+
+
+def test_shared_tones_are_reference_counted():
+    engine = ChordEngine()
+    engine.process(on(36))                    # major
+    engine.process(on(60))                    # C major: 60 64 67
+    engine.process(on(37))                    # minor (newest wins)
+    out = engine.process(on(64))              # E minor: 64 67 71 — 64,67 already on
+    assert out == [on(71)]                    # only the new pitch is note-on'd
+    out = engine.process(off(60))             # release C major
+    assert out == [off(60)]                   # 64 and 67 still owned by E minor
+    out = engine.process(off(64))
+    assert out == [off(64), off(67), off(71)]
+
+
+def test_retrigger_held_root_releases_previous_emission_first():
+    engine = ChordEngine()
+    engine.process(on(36))                    # major
+    engine.process(on(60))                    # C major
+    engine.process(on(37))                    # switch to minor
+    out = engine.process(on(60))              # retrigger same root
+    assert out == [off(60), off(64), off(67), on(60), on(63), on(67)]
+    assert engine.process(off(60)) == [off(60), off(63), off(67)]
+
+
+def test_untracked_note_off_is_forwarded():
+    engine = ChordEngine()
+    assert engine.process(off(72)) == [off(72)]
+
+
+def test_velocity_zero_note_on_is_a_note_off():
+    engine = ChordEngine()
+    engine.process(on(36))
+    engine.process(on(60))
+    out = engine.process(on(60, velocity=0))
+    assert out == [off(60), off(64), off(67)]
+
+
+def test_flush_releases_everything_and_resets():
+    engine = ChordEngine()
+    engine.process(on(36))
+    engine.process(on(60))
+    engine.process(on(72))
+    assert engine.flush() == [off(60), off(64), off(67), off(72), off(76), off(79)]
+    assert engine.flush() == []
