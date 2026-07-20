@@ -31,7 +31,7 @@ if ! probe .venv/bin/python; then
     done
     if [ -z "$PY" ]; then
         if [ "$BLOCKED" = 1 ]; then
-            alert "macOS is blocking Orchid from reading its own folder ($REPO). Documents, Desktop and Downloads are privacy-protected, and unsigned apps cannot ask for access. Fix: move the whole orchid folder somewhere else (for example your home folder), or add Orchid.app to Full Disk Access in System Settings > Privacy & Security. Details: $LOG"
+            alert "macOS is blocking Orchid from reading its own folder ($REPO) because Documents, Desktop and Downloads are privacy-protected. Fix: add Orchid.app to Full Disk Access in System Settings > Privacy & Security, then relaunch. (Or move the whole orchid folder somewhere unprotected, like your home folder.) Details: $LOG"
         else
             alert "No Python with tkinter found. Install the Xcode Command Line Tools (run: xcode-select --install) and try again. Details: $LOG"
         fi
