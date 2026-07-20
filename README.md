@@ -23,6 +23,9 @@ keeps the code signature; after a plain `git clone`, run `./build_app.sh`
 once to assemble and sign the app). After changing any of the Python
 sources, run `./build_app.sh` to refresh the bundle.
 
+**Updates:** Cmd+, opens Settings, shows the version, and offers one-click
+updates published from the GitHub repo (bump `VERSION`, push to main).
+
 ## Run (CLI)
 
     .venv/bin/python orchid.py                  # list MIDI ports

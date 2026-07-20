@@ -6,7 +6,7 @@ set -e
 cd "$(dirname "$0")"
 RES=Orchid.app/Contents/Resources
 mkdir -p "$RES"
-cp gui.py chords.py settings.py requirements.txt "$RES/"
+cp gui.py chords.py settings.py update.py requirements.txt VERSION "$RES/"
 chmod +x Orchid.app/Contents/MacOS/orchid
 ID="$(security find-identity -v -p codesigning 2>/dev/null \
       | awk -F'"' '/Developer ID Application/ {print $2; exit}')"
