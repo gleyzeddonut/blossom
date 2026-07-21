@@ -674,6 +674,43 @@ def test_offkey_dominants_keep_fifth_in_triad_voicing():
     assert engine.process(on(61)) == [on(61), on(65), on(68), on(71)]
 
 
+def test_minor_key_mode_plays_minor_diatonics():
+    engine = ChordEngine(key=0, mode="minor")     # C minor
+    assert engine.process(on(60)) == [on(60), on(63), on(67)]   # i  Cm
+    engine.process(off(60))
+    assert engine.process(on(63)) == [on(63), on(67), on(70)]   # III Eb
+    engine.process(off(63))
+    engine2 = ChordEngine(key=0, mode="minor")
+    assert engine2.process(on(62)) == [on(62), on(65), on(68)]  # ii dim
+
+
+def test_dorian_mode_and_sevenths():
+    engine = ChordEngine(key=2, mode="dorian", voicing="1-3-5-7")  # D dorian
+    assert engine.process(on(62)) == [on(62), on(65), on(69), on(72)]  # Dm7
+    engine2 = ChordEngine(key=2, mode="dorian")
+    assert engine2.process(on(67)) == [on(67), on(71), on(74)]  # IV G major
+
+
+def test_minor_key_tension_bending_uses_the_minor_scale():
+    engine = ChordEngine(key=0, mode="minor")
+    engine.process(on(41))                    # add9 conform key
+    # add9 on C minor: 9th is D, in C minor scale -> stays natural
+    assert engine.process(on(60)) == [on(60), on(63), on(67), on(74)]
+    engine.process(off(60))
+    engine.process(off(41))
+    # add9 on F (iv): 9th G is in scale; on D (ii dim) 9th E is NOT
+    engine2 = ChordEngine(key=0, mode="minor")
+    engine2.process(on(41))
+    out = engine2.process(on(62))             # D dim + bent 9 (Eb)
+    assert [m.note for m in out] == [62, 65, 68, 75]
+
+
+def test_minor_offkey_snap_targets_the_minor_scale():
+    engine = ChordEngine(key=0, mode="minor", offkey="snap")
+    # E natural is off-scale in C minor; snaps down to Eb major chord
+    assert engine.process(on(64)) == [on(63), on(67), on(70)]
+
+
 def test_modifier_overrides_key_mode():
     engine = ChordEngine(key=0)               # key of C
     engine.process(on(38))                    # hold minor modifier

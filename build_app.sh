@@ -10,5 +10,9 @@ cp gui.py chords.py settings.py update.py requirements.txt VERSION blossom.icns 
 chmod +x Blossom.app/Contents/MacOS/blossom
 ID="$(security find-identity -v -p codesigning 2>/dev/null \
       | awk -F'"' '/Developer ID Application/ {print $2; exit}')"
-codesign --force --deep -s "${ID:--}" Blossom.app
+if [ -n "$ID" ]; then
+    codesign --force --deep --timestamp --options runtime -s "$ID" Blossom.app
+else
+    codesign --force --deep -s - Blossom.app
+fi
 echo "Built and signed Blossom.app${ID:+ ($ID)}"

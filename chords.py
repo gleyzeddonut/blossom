@@ -146,6 +146,29 @@ def identify_chord(pitches):
 # Major-scale pitch classes relative to the key root.
 MAJOR_SCALE = {0, 2, 4, 5, 7, 9, 11}
 
+# Scales for key mode, as pitch classes above the key root.
+MODES = {
+    "major":      (0, 2, 4, 5, 7, 9, 11),
+    "minor":      (0, 2, 3, 5, 7, 8, 10),
+    "dorian":     (0, 2, 3, 5, 7, 9, 10),
+    "phrygian":   (0, 1, 3, 5, 7, 8, 10),
+    "lydian":     (0, 2, 4, 6, 7, 9, 11),
+    "mixolydian": (0, 2, 4, 5, 7, 9, 10),
+}
+
+
+def build_degree_maps(scale):
+    """(triads, sevenths) for a 7-note scale: chords stacked in thirds on
+    each degree, keyed by the degree's pitch class above the key root."""
+    sc = sorted(scale)
+    triads, sevenths = {}, {}
+    for i, pc in enumerate(sc):
+        def tone(k):
+            return sc[(i + k) % 7] + 12 * ((i + k) // 7) - pc
+        triads[pc] = (0, tone(2), tone(4))
+        sevenths[pc] = (0, tone(2), tone(4), tone(6))
+    return triads, sevenths
+
 # Chord intervals that are tensions (9ths, 11ths/sus4s, 13ths). In key mode
 # these bend to the scale; core tones (3rd/5th/7th) stay as played.
 _TENSION_INTERVALS = {2, 5, 9, 14, 17, 21}
@@ -237,12 +260,16 @@ class ChordEngine:
 
     def __init__(self, zone_base=ZONE_BASE, chord_map=None, channel=0,
                  key=None, spread=False, mono=False, offkey="bypass",
-                 chord_names=None, voicing="1-3-5", voice_lead=True):
+                 chord_names=None, voicing="1-3-5", voice_lead=True,
+                 mode="major"):
         self.zone_base = zone_base
         self.chord_map = CHORD_MAP if chord_map is None else chord_map
         self.chord_names = CHORD_NAMES if chord_names is None else chord_names
         self.channel = channel
         self.key = key      # pitch class 0-11 for key mode, or None
+        self.mode = mode if mode in MODES else "major"
+        self._scale = set(MODES[self.mode])
+        self._triads, self._sevenths = build_degree_maps(self._scale)
         self.offkey = offkey       # non-scale notes: "dom7"/"snap"/"bypass"
         self.voicing = voicing     # key-mode tones: "1-3"/"1-3-5"/"1-3-5-7"/"smart"
         self.voice_lead = voice_lead   # pick inversions near the last chord
@@ -317,13 +344,13 @@ class ChordEngine:
         notes follow the offkey setting; else passthrough."""
         if self._held_modifiers:
             degree = (root - self.key) % 12 if self.key is not None else None
-            diatonic = degree in KEY_DEGREE_CHORDS
+            diatonic = degree in self._triads
             combined = set()
             for offset in self._held_modifiers:
                 name = self.chord_names.get(offset)
                 if diatonic and name in CONFORM_EXTENSIONS:
-                    base = (KEY_DEGREE_SEVENTHS if name in _SEVENTH_BASED
-                            else KEY_DEGREE_CHORDS)[degree]
+                    base = (self._sevenths if name in _SEVENTH_BASED
+                            else self._triads)[degree]
                     combined.update(base)
                     combined.update(CONFORM_EXTENSIONS[name])
                 else:
@@ -336,7 +363,7 @@ class ChordEngine:
             return root, sorted(combined)
         if self.key is not None:
             degree = (root - self.key) % 12
-            if degree in KEY_DEGREE_CHORDS:
+            if degree in self._triads:
                 return root, self._degree_chord(root, degree)
             # Non-diatonic. In a major key every chromatic note sits one
             # semitone above a scale note, so "the diatonic note below" is
@@ -359,8 +386,8 @@ class ChordEngine:
 
     def _degree_chord(self, root, degree):
         """Intervals for a diatonic degree, shaped by the voicing setting."""
-        triad = KEY_DEGREE_CHORDS[degree]
-        seventh = KEY_DEGREE_SEVENTHS[degree]
+        triad = self._triads[degree]
+        seventh = self._sevenths[degree]
         if self.voicing == "1-3":
             return triad[:2]
         if self.voicing == "1-5":
@@ -414,7 +441,7 @@ class ChordEngine:
         adjusted = set()
         for i in intervals:
             if (i in _TENSION_INTERVALS
-                    and (root + i - self.key) % 12 not in MAJOR_SCALE):
+                    and (root + i - self.key) % 12 not in self._scale):
                 i += 1 if i in _FOURTHS else -1
             adjusted.add(i)
         return adjusted

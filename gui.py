@@ -84,6 +84,9 @@ SOUNDING = "#9D6BFF"
 PAD_TOP, PAD_BOTTOM = "#312C3B", "#262130"
 PAD_NOTE, PAD_QUALITY = "#E4DCF5", "#A48FD4"
 
+# Arp step orders. "played" follows the order notes were added.
+_ARP_PATTERNS = ("up", "down", "updn", "rand", "played")
+
 # MIDI clock runs at 24 ticks per quarter note.
 _ARP_TICKS = {"1/4": 24, "1/8": 12, "1/8T": 8,
               "1/16": 6, "1/16T": 4, "1/32": 3}
@@ -314,6 +317,181 @@ class ChevronView(NSView):
         _rgb(TEXT_FAINT).set()
         path.setLineWidth_(1.5)
         path.setLineCapStyle_(1)   # round
+        path.stroke()
+
+
+class DragValueView(NSView):
+    """Numeric readout you drag vertically to change, or double-click to
+    type. Draws itself, so it matches the panel at any scale."""
+
+    def initWithFrame_(self, frame):
+        self = objc.super(DragValueView, self).initWithFrame_(frame)
+        if self is None:
+            return None
+        self.value = 0.0
+        self.min_value, self.max_value = 0.0, 100.0
+        self.step = 0.5            # units per pixel of vertical drag
+        self.fmt = lambda v: "%d" % round(v)
+        self.on_change = None      # callable(self)
+        self.enabled = True
+        self._drag = None
+        self._editor = None
+        self._override = None      # display text that replaces the value
+        return self
+
+    def mouseDownCanMoveWindow(self):
+        return False
+
+    def acceptsFirstMouse_(self, event):
+        return True
+
+    @objc.python_method
+    def set_value(self, value, notify=True):
+        self.value = max(self.min_value, min(self.max_value, float(value)))
+        self.setNeedsDisplay_(True)
+        if notify and self.on_change is not None:
+            self.on_change(self)
+
+    @objc.python_method
+    def set_override(self, text):
+        self._override = text
+        self.setNeedsDisplay_(True)
+
+    def mouseDown_(self, event):
+        if not self.enabled:
+            return
+        if event.clickCount() >= 2:
+            self._begin_edit()
+            return
+        self._drag = (event.locationInWindow().y, self.value)
+
+    def mouseDragged_(self, event):
+        if self._drag is None or not self.enabled:
+            return
+        y0, v0 = self._drag
+        self._override = None
+        self.set_value(v0 + (event.locationInWindow().y - y0) * self.step)
+
+    def mouseUp_(self, event):
+        self._drag = None
+
+    @objc.python_method
+    def _begin_edit(self):
+        if self._editor is not None:
+            return
+        field = NSTextField.alloc().initWithFrame_(self.bounds())
+        field.setStringValue_(self.fmt(self.value).split()[0].rstrip("%"))
+        field.setFont_(NSFont.monospacedSystemFontOfSize_weight_(
+            11, NSFontWeightRegular))
+        field.setBezeled_(False)
+        field.setDrawsBackground_(True)
+        field.setBackgroundColor_(_rgb(WELL_BG))
+        field.setTextColor_(_rgb(GLOW_TEXT))
+        field.setTarget_(self)
+        field.setAction_("editDone:")
+        self.addSubview_(field)
+        self._editor = field
+        self.window().makeFirstResponder_(field)
+
+    def editDone_(self, sender):
+        try:
+            value = float(str(sender.stringValue()).strip())
+        except ValueError:
+            value = self.value
+        editor, self._editor = self._editor, None
+        if editor is not None:
+            editor.removeFromSuperview()
+        self._override = None
+        self.set_value(value)
+
+    def drawRect_(self, rect):
+        bounds = self.bounds()
+        text = self._override if self._override else self.fmt(self.value)
+        astr = NSAttributedString.alloc().initWithString_attributes_(
+            text, {NSFontAttributeName:
+                   NSFont.monospacedSystemFontOfSize_weight_(
+                       11, NSFontWeightRegular),
+                   NSForegroundColorAttributeName: _rgb(GLOW_TEXT)})
+        size = astr.size()
+        astr.drawAtPoint_((bounds.size.width - size.width,
+                           (bounds.size.height - size.height) / 2.0))
+
+
+class MenuValueView(NSView):
+    """Dropdown rendered as plain text with a small chevron beside it -
+    no box. Click anywhere on it to pop the menu."""
+
+    def initWithFrame_(self, frame):
+        self = objc.super(MenuValueView, self).initWithFrame_(frame)
+        if self is None:
+            return None
+        self.items = []
+        self.value = ""
+        self.on_change = None
+        self.font_size = 12.0
+        self.enabled = True
+        return self
+
+    @objc.python_method
+    def titleOfSelectedItem(self):
+        return self.value
+
+    @objc.python_method
+    def selectItemWithTitle_(self, title):
+        if title in self.items:
+            self.value = str(title)
+            self.setNeedsDisplay_(True)
+
+    @objc.python_method
+    def setEnabled_(self, on):
+        self.enabled = bool(on)
+        self.setNeedsDisplay_(True)
+
+    def mouseDownCanMoveWindow(self):
+        return False
+
+    def acceptsFirstMouse_(self, event):
+        return True
+
+    def mouseDown_(self, event):
+        if not self.enabled:
+            return
+        menu = NSMenu.alloc().init()
+        for name in self.items:
+            item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                name, "picked:", "")
+            item.setTarget_(self)
+            if name == self.value:
+                item.setState_(1)
+            menu.addItem_(item)
+        NSMenu.popUpContextMenu_withEvent_forView_(menu, event, self)
+
+    def picked_(self, sender):
+        self.value = str(sender.title())
+        self.setNeedsDisplay_(True)
+        if self.on_change is not None:
+            self.on_change(self)
+
+    def drawRect_(self, rect):
+        bounds = self.bounds()
+        color = _rgb(GLOW_TEXT, 0.9 if self.enabled else 0.4)
+        astr = NSAttributedString.alloc().initWithString_attributes_(
+            self.value, {NSFontAttributeName:
+                         NSFont.monospacedSystemFontOfSize_weight_(
+                             self.font_size, NSFontWeightRegular),
+                         NSForegroundColorAttributeName: color})
+        size = astr.size()
+        y = (bounds.size.height - size.height) / 2.0
+        astr.drawAtPoint_((0, y))
+        cx = size.width + 9
+        cy = bounds.size.height / 2.0
+        path = NSBezierPath.bezierPath()
+        path.moveToPoint_((cx - 3.2, cy + 1.6))
+        path.lineToPoint_((cx, cy - 1.6))
+        path.lineToPoint_((cx + 3.2, cy + 1.6))
+        _rgb(TEXT_FAINT).set()
+        path.setLineWidth_(1.4)
+        path.setLineCapStyle_(1)
         path.stroke()
 
 
@@ -684,6 +862,9 @@ class OrchidController(NSObject):
         self._strum_lock = threading.Lock()
         self._pending = {}   # note -> Timer for strum-delayed note-ons
         self.arp_on = False
+        self.arp_pattern = "up"
+        self.arp_octaves = 1
+        self.arp_gate = 0.6
         self.tempo_bpm = 120
         self.arp_rate_ms = 250     # derived from tempo and subdivision
         self._arp_lock = threading.Lock()
@@ -794,39 +975,47 @@ class OrchidController(NSObject):
             NSMakeRect(20, 422, 460, 44))
         content.addSubview_(self.arp_strip)
         self.arp_check = PillSwitch.alloc().initWithFrame_(
-            NSMakeRect(10, 10, 44, 24))
+            NSMakeRect(8, 10, 44, 24))
         self.arp_check.on_change = self.arpChanged_
         self.arp_strip.addSubview_(self.arp_check)
-        self.arp_label = _label("ARP", NSMakeRect(64, 15, 36, 13),
-                                          size=10, bold=True,
-                                          color=_rgb(TEXT_SECTION))
+        self.arp_label = _label("ARP", NSMakeRect(56, 15, 32, 13),
+                                size=10, bold=True, color=_rgb(TEXT_SECTION))
         self.arp_strip.addSubview_(self.arp_label)
-        self.arp_strip.addSubview_(WellView.alloc().initWithFrame_(
-            NSMakeRect(104, 9, 64, 26)))
-        self.arp_div_pop = NSPopUpButton.alloc().initWithFrame_(
-            NSMakeRect(104, 9, 64, 26))
-        self.arp_div_pop.setBordered_(False)
-        self.arp_div_pop.setAlphaValue_(0.85)
-        self.arp_div_pop.addItemsWithTitles_(list(_ARP_DIVS))
-        self.arp_div_pop.setTarget_(self)
-        self.arp_div_pop.setAction_("arpDivChanged:")
-        self.arp_strip.addSubview_(self.arp_div_pop)
-        self.arp_div_pop.cell().setArrowPosition_(0)
-        self.arp_strip.addSubview_(ChevronView.alloc().initWithFrame_(
-            NSMakeRect(153, 17, 10, 10)))
-        self.tempo_slider = NSSlider.alloc().initWithFrame_(
-            NSMakeRect(182, 12, 196, 20))
-        self.tempo_slider.setCell_(GlowSliderCell.alloc().init())
-        self.tempo_slider.setContinuous_(True)
-        self.tempo_slider.setMinValue_(40)
-        self.tempo_slider.setMaxValue_(220)    # BPM
-        self.tempo_slider.setTarget_(self)
-        self.tempo_slider.setAction_("tempoChanged:")
-        self.arp_strip.addSubview_(self.tempo_slider)
-        self.tempo_value = _label("120 bpm", NSMakeRect(384, 14, 62, 16),
-                                  size=11, mono=True, color=_rgb(GLOW_TEXT),
-                                  align=NSTextAlignmentRight)
-        self.arp_strip.addSubview_(self.tempo_value)
+
+        def strip_pop(x, w, titles, action):
+            view = MenuValueView.alloc().initWithFrame_(
+                NSMakeRect(x, 14, w, 16))
+            view.items = list(titles)
+            view.value = titles[0]
+            view.font_size = 11.0
+            view.on_change = action
+            self.arp_strip.addSubview_(view)
+            return view
+
+        self.arp_div_pop = strip_pop(92, 60, list(_ARP_DIVS),
+                                     self.arpDivChanged_)
+        self.arp_pattern_pop = strip_pop(160, 66, list(_ARP_PATTERNS),
+                                         self.arpTweakChanged_)
+        self.arp_oct_pop = strip_pop(234, 36, ["1", "2", "3"],
+                                     self.arpTweakChanged_)
+        self.arp_strip.addSubview_(_label("gate", NSMakeRect(286, 15, 30, 13),
+                                          size=10, color=_rgb(TEXT_HINT)))
+        self.gate_drag = DragValueView.alloc().initWithFrame_(
+            NSMakeRect(316, 14, 44, 16))
+        self.gate_drag.min_value, self.gate_drag.max_value = 10, 100
+        self.gate_drag.step = 0.6
+        self.gate_drag.fmt = lambda v: "%d%%" % round(v)
+        self.gate_drag.set_value(60, notify=False)
+        self.gate_drag.on_change = self._gate_changed
+        self.arp_strip.addSubview_(self.gate_drag)
+        self.tempo_drag = DragValueView.alloc().initWithFrame_(
+            NSMakeRect(372, 14, 76, 16))
+        self.tempo_drag.min_value, self.tempo_drag.max_value = 40, 220
+        self.tempo_drag.step = 0.5
+        self.tempo_drag.fmt = lambda v: "%d bpm" % round(v)
+        self.tempo_drag.set_value(120, notify=False)
+        self.tempo_drag.on_change = self._tempo_changed
+        self.arp_strip.addSubview_(self.tempo_drag)
 
         # -- HARMONY card ----------------------------------------------
         harmony = CardView.alloc().initWithFrame_(
@@ -840,57 +1029,36 @@ class OrchidController(NSObject):
         self.key_label = _label("Key", NSMakeRect(36, 354, 36, 16),
                                    color=_rgb(TEXT_PRIMARY))
         content.addSubview_(self.key_label)
-        content.addSubview_(_label("harmonize to a scale",
-                                   NSMakeRect(72, 355, 150, 13), size=11,
-                                   color=_rgb(TEXT_HINT)))
-        content.addSubview_(WellView.alloc().initWithFrame_(
-            NSMakeRect(240, 347, 70, 26)))
-        self.key_pop = NSPopUpButton.alloc().initWithFrame_(
-            NSMakeRect(240, 347, 70, 26))
-        self.key_pop.setBordered_(False)
-        self.key_pop.setAlphaValue_(0.85)
-        self.key_pop.addItemsWithTitles_(["Off"] + list(NOTE_NAMES))
-        self.key_pop.setTarget_(self)
-        self.key_pop.setAction_("settingsChanged:")
-        content.addSubview_(self.key_pop)
-        self.key_pop.cell().setArrowPosition_(0)
-        content.addSubview_(ChevronView.alloc().initWithFrame_(
-            NSMakeRect(295, 355, 10, 10)))
+        def menu_value(frame, items, default, action, size=12.0):
+            view = MenuValueView.alloc().initWithFrame_(frame)
+            view.items = list(items)
+            view.value = default
+            view.font_size = size
+            view.on_change = action
+            content.addSubview_(view)
+            return view
+
+        self.key_pop = menu_value(NSMakeRect(96, 350, 64, 20),
+                                  ["Off"] + list(NOTE_NAMES), "Off",
+                                  self.settingsChanged_)
+        self.mode_pop = menu_value(NSMakeRect(172, 350, 110, 20),
+                                   ["major", "minor", "dorian", "phrygian",
+                                    "lydian", "mixolydian"], "major",
+                                   self.settingsChanged_)
         self.offkey_label = _label("off-key", NSMakeRect(318, 354, 44, 13),
                                    size=11, color=_rgb(TEXT_HINT))
         content.addSubview_(self.offkey_label)
-        content.addSubview_(WellView.alloc().initWithFrame_(
-            NSMakeRect(368, 347, 96, 26)))
-        self.offkey_pop = NSPopUpButton.alloc().initWithFrame_(
-            NSMakeRect(368, 347, 96, 26))
-        self.offkey_pop.setBordered_(False)
-        self.offkey_pop.setAlphaValue_(0.85)
-        self.offkey_pop.addItemsWithTitles_(["V7", "dom7", "snap", "thru"])
-        self.offkey_pop.setTarget_(self)
-        self.offkey_pop.setAction_("settingsChanged:")
-        content.addSubview_(self.offkey_pop)
-        self.offkey_pop.cell().setArrowPosition_(0)
-        content.addSubview_(ChevronView.alloc().initWithFrame_(
-            NSMakeRect(449, 355, 10, 10)))
+        self.offkey_pop = menu_value(NSMakeRect(368, 350, 80, 20),
+                                     ["V7", "dom7", "snap", "thru"], "V7",
+                                     self.settingsChanged_)
 
         self.voicing_label = _label("Voicing", NSMakeRect(36, 310, 60, 16),
                                    color=_rgb(TEXT_PRIMARY))
         content.addSubview_(self.voicing_label)
-        content.addSubview_(WellView.alloc().initWithFrame_(
-            NSMakeRect(240, 303, 96, 26)))
-        self.voicing_pop = NSPopUpButton.alloc().initWithFrame_(
-            NSMakeRect(240, 303, 96, 26))
-        self.voicing_pop.setBordered_(False)
-        self.voicing_pop.setAlphaValue_(0.85)
-        self.voicing_pop.addItemsWithTitles_(
-            ["1-3", "1-5", "1-3-5", "1-3-5-7", "smart"])
-        self.voicing_pop.selectItemWithTitle_("1-3-5")
-        self.voicing_pop.setTarget_(self)
-        self.voicing_pop.setAction_("settingsChanged:")
-        content.addSubview_(self.voicing_pop)
-        self.voicing_pop.cell().setArrowPosition_(0)
-        content.addSubview_(ChevronView.alloc().initWithFrame_(
-            NSMakeRect(321, 311, 10, 10)))
+        self.voicing_pop = menu_value(NSMakeRect(240, 306, 96, 20),
+                                      ["1-3", "1-5", "1-3-5", "1-3-5-7",
+                                       "smart"], "1-3-5",
+                                      self.settingsChanged_)
         self.lead_label = _label("voice lead", NSMakeRect(346, 310, 64, 13),
                                    size=11, color=_rgb(TEXT_HINT))
         content.addSubview_(self.lead_label)
@@ -1021,49 +1189,32 @@ class OrchidController(NSObject):
     @objc.python_method
     def _set_tooltips(self):
         tips = {
-            self.piano: "Live view of what's sounding. Click keys to play; "
-                        "the violet octave is the chord keys.",
-            self.legend: "The quality assigned to each chord key. "
-                         "Click a pad to reassign it.",
-            self.arp_label: "Arpeggiator: cycle the held chord's notes "
-                            "instead of sustaining them. Pick a "
-                            "subdivision; the slider sets the tempo.",
-            self.tempo_value: "Arp tempo in BPM. Ignored while synced to "
-                              "MIDI clock.",
-            self.key_label: "Key mode: harmonize every played note to this "
-                            "major scale. Off = chords come only from the "
-                            "chord keys.",
-            self.offkey_label: "What out-of-key notes play in key mode: "
-                               "V7 = dominant of the note below, dom7 = "
-                               "7th chord on the pressed key, snap = the "
-                               "chord of the note below, thru = the bare "
-                               "note.",
-            self.voicing_label: "Chord tones used in key mode: 1-3 shells, "
-                                "1-5 power chords, 1-3-5 triads, 1-3-5-7 "
-                                "sevenths, or smart (adds color when it "
-                                "connects smoothly).",
-            self.lead_label: "Voice leading: choose inversions that "
-                             "connect smoothly from chord to chord.",
-            self.spread_label: "Spread: lift the second-lowest voice an "
-                               "octave for wider, open voicings.",
-            self.mono_label: "Mono: one chord at a time - a new root "
-                             "releases the previous chord.",
-            self.strum_label: "Strum: roll chord notes low-to-high like a "
-                              "guitar (ms between notes).",
-            self.humanize_label: "Humanize: a little random timing and "
-                                 "velocity so chords feel played.",
-            self.footer_wells["IN"]: "MIDI input: the keyboard you play.",
-            self.footer_wells["OUT"]: "MIDI output: the synth that makes "
-                                      "the sound.",
-            self.footer_wells["SYNC"]: "MIDI clock source for tempo sync - "
-                                       "e.g. an IAC bus carrying your "
-                                       "DAW's clock. The toggle turns sync "
-                                       "on and off.",
-            self.footer_wells["BASE"]: "Base note: the lowest key of the "
-                                       "chord-keys zone (it spans 12 keys "
-                                       "up from here).",
-            self.footer_wells["CH"]: "MIDI channel Blossom sends on - "
-                                     "match your synth.",
+            self.piano: "Shows what's playing. Click keys to try sounds.",
+            self.legend: "Your chord buttons. Click one to change what "
+                         "chord it makes.",
+            self.arp_label: "Plays your chord one note at a time, in "
+                            "rhythm.",
+            self.tempo_drag: "Speed. Drag up or down, or double-click to "
+                             "type a number.",
+            self.gate_drag: "Note length: low = short and choppy, high = "
+                            "long and smooth.",
+            self.key_label: "Pick a key and every note you play becomes a "
+                            "chord that fits.",
+            self.mode_pop: "Happy (major), sad (minor), or in between.",
+            self.offkey_label: "What the out-of-key notes do. Try them.",
+            self.voicing_label: "How big the chords are: 2, 3, or 4 notes. "
+                                "Smart decides for you.",
+            self.lead_label: "Makes chords flow into each other smoothly.",
+            self.spread_label: "Opens the chord up for a bigger sound.",
+            self.mono_label: "New chord cuts off the old one.",
+            self.strum_label: "Rakes the notes like a guitar strum.",
+            self.humanize_label: "A little looseness, like a real player.",
+            self.footer_wells["IN"]: "The keyboard you play.",
+            self.footer_wells["OUT"]: "The synth that makes the sound.",
+            self.footer_wells["SYNC"]: "Locks the arp to your DAW's beat.",
+            self.footer_wells["BASE"]: "Where the chord buttons start on "
+                                       "your keyboard.",
+            self.footer_wells["CH"]: "MIDI channel - match your synth.",
         }
         for view, tip in tips.items():
             view.setToolTip_(tip)
@@ -1073,7 +1224,10 @@ class OrchidController(NSObject):
         on = bool(self.arp_check.state())
         self.arp_strip.animator().setAlphaValue_(1.0 if on else 0.55)
         self.arp_div_pop.setEnabled_(on)
-        self.tempo_slider.setEnabled_(on)
+        self.arp_pattern_pop.setEnabled_(on)
+        self.arp_oct_pop.setEnabled_(on)
+        self.gate_drag.enabled = on
+        self.tempo_drag.enabled = on
 
     @objc.python_method
     def _set_status(self, text, ok):
@@ -1115,8 +1269,19 @@ class OrchidController(NSObject):
         self.humanize_ms = int(stored.get("humanize", 0))
         self.humanize_value.setStringValue_("%d ms" % self.humanize_ms)
         self.tempo_bpm = int(stored.get("tempo", 120))
-        self.tempo_slider.setIntValue_(self.tempo_bpm)
-        self.tempo_value.setStringValue_("%d bpm" % self.tempo_bpm)
+        self.tempo_drag.set_value(self.tempo_bpm, notify=False)
+        self.arp_gate = max(0.1, min(1.0, float(stored.get("arp_gate", 60))
+                                     / 100.0))
+        self.gate_drag.set_value(self.arp_gate * 100, notify=False)
+        if stored.get("mode") in ("major", "minor", "dorian", "phrygian",
+                                  "lydian", "mixolydian"):
+            self.mode_pop.selectItemWithTitle_(stored["mode"])
+        if stored.get("arp_pattern") in _ARP_PATTERNS:
+            self.arp_pattern_pop.selectItemWithTitle_(stored["arp_pattern"])
+            self.arp_pattern = stored["arp_pattern"]
+        if stored.get("arp_oct") in (1, 2, 3):
+            self.arp_oct_pop.selectItemWithTitle_(str(stored["arp_oct"]))
+            self.arp_octaves = int(stored["arp_oct"])
         if stored.get("arp_div") in _ARP_DIVS:
             self.arp_div_pop.selectItemWithTitle_(stored["arp_div"])
         else:
@@ -1190,10 +1355,21 @@ class OrchidController(NSObject):
         self.humanize_value.setStringValue_("%d ms" % self.humanize_ms)
         self._save_tweaks()
 
-    def tempoChanged_(self, sender):
-        self.tempo_bpm = int(sender.intValue())
-        self.tempo_value.setStringValue_("%d bpm" % self.tempo_bpm)
+    @objc.python_method
+    def _tempo_changed(self, sender):
+        self.tempo_bpm = int(round(sender.value))
         self._update_arp_rate()
+        self._save_tweaks()
+
+    @objc.python_method
+    def _gate_changed(self, sender):
+        self.arp_gate = sender.value / 100.0
+        self._save_tweaks()
+
+    def arpTweakChanged_(self, sender):
+        self.arp_pattern = str(self.arp_pattern_pop.titleOfSelectedItem())
+        self.arp_octaves = int(self.arp_oct_pop.titleOfSelectedItem())
+        self._arp_idx = 0
         self._save_tweaks()
 
     def arpDivChanged_(self, sender):
@@ -1263,8 +1439,12 @@ class OrchidController(NSObject):
         stored["strum"] = int(self.strum_slider.intValue())
         stored["humanize"] = int(self.humanize_slider.intValue())
         stored["arp"] = bool(self.arp_check.state())
-        stored["tempo"] = int(self.tempo_slider.intValue())
+        stored["tempo"] = int(round(self.tempo_drag.value))
+        stored["arp_gate"] = int(round(self.gate_drag.value))
         stored["arp_div"] = self.arp_div_pop.titleOfSelectedItem()
+        stored["arp_pattern"] = self.arp_pattern_pop.titleOfSelectedItem()
+        stored["arp_oct"] = int(self.arp_oct_pop.titleOfSelectedItem())
+        stored["mode"] = self.mode_pop.titleOfSelectedItem()
         stored["clock_port"] = self.clock_pop.titleOfSelectedItem()
         stored["chord_keys"] = list(self.chord_keys)
         stored["sync_on"] = bool(self.sync_check.state())
@@ -1298,8 +1478,12 @@ class OrchidController(NSObject):
         config["strum"] = int(self.strum_slider.intValue())
         config["humanize"] = int(self.humanize_slider.intValue())
         config["arp"] = bool(self.arp_check.state())
-        config["tempo"] = int(self.tempo_slider.intValue())
+        config["tempo"] = int(round(self.tempo_drag.value))
+        config["arp_gate"] = int(round(self.gate_drag.value))
         config["arp_div"] = self.arp_div_pop.titleOfSelectedItem()
+        config["arp_pattern"] = self.arp_pattern_pop.titleOfSelectedItem()
+        config["arp_oct"] = int(self.arp_oct_pop.titleOfSelectedItem())
+        config["mode"] = self.mode_pop.titleOfSelectedItem()
         config["clock_port"] = self.clock_pop.titleOfSelectedItem()
         config["chord_keys"] = list(self.chord_keys)
         config["sync_on"] = bool(self.sync_check.state())
@@ -1313,7 +1497,8 @@ class OrchidController(NSObject):
                                   mono=config["mono"],
                                   offkey=config["offkey"],
                                   voicing=config["voicing"],
-                                  voice_lead=config["voice_lead"])
+                                  voice_lead=config["voice_lead"],
+                                  mode=config["mode"])
         if previous is not None:
             # settings tweaks shouldn't reset live performance state
             self.engine.wheel_offset = prev_wheel
@@ -1333,6 +1518,8 @@ class OrchidController(NSObject):
         self._set_status("RUNNING", ok=True)
 
     def syncChanged_(self, sender):
+        if not sender.state():
+            self.tempo_drag.set_override(None)
         self._save_tweaks()
         self._apply_clock()
 
@@ -1428,37 +1615,74 @@ class OrchidController(NSObject):
 
     @objc.python_method
     def _arp_step(self, gate):
-        """Play one arp note; the note-off follows after `gate` seconds."""
+        """Play one arp note per the pattern; note-off follows after `gate`.
+        Humanize adds timing and velocity slop to each step."""
         engine, outport = self.engine, self.outport
         with self._arp_lock:
-            notes = sorted(self._arp_notes)
+            base = list(self._arp_notes)       # insertion order = played
             velocities = dict(self._arp_notes)
-        if not (self.arp_on and notes and outport is not None
+        if not (self.arp_on and base and outport is not None
                 and engine is not None):
             self._arp_idx = 0
             return
-        note = notes[self._arp_idx % len(notes)]
-        self._arp_idx += 1
+        octaves = max(1, int(self.arp_octaves))
+        pool = [n + 12 * o for o in range(octaves)
+                for n in base if n + 12 * o <= 127]
+        pattern = self.arp_pattern
+        if pattern == "down":
+            seq = sorted(pool, reverse=True)
+        elif pattern == "updn":
+            up = sorted(pool)
+            seq = up + up[-2:0:-1] if len(up) > 2 else up
+        elif pattern == "played":
+            seq = pool
+        else:
+            seq = sorted(pool)
+        if pattern == "rand":
+            note = random.choice(pool)
+        else:
+            note = seq[self._arp_idx % len(seq)]
+            self._arp_idx += 1
+        source = note if note in velocities else \
+            min(base, key=lambda b: abs(b - note))
+        velocity = velocities.get(source, 100)
+        jitter = int(self.humanize_ms / 3)
+        if jitter:
+            velocity = max(1, min(127, velocity
+                                  + random.randint(-jitter, jitter)))
         channel = engine.channel
-        try:
-            outport.send(mido.Message(
-                "note_on", note=note,
-                velocity=velocities.get(note, 100), channel=channel))
-        except Exception:
-            return
+        delay = (random.uniform(0, self.humanize_ms / 1000.0)
+                 if self.humanize_ms else 0.0)
 
-        def note_off():
+        def fire_on():
             try:
                 port = self.outport
-                if port is not None:
-                    port.send(mido.Message("note_off", note=note,
-                                           velocity=0, channel=channel))
+                if port is None:
+                    return
+                port.send(mido.Message("note_on", note=note,
+                                       velocity=velocity, channel=channel))
+
+                def note_off():
+                    try:
+                        p = self.outport
+                        if p is not None:
+                            p.send(mido.Message("note_off", note=note,
+                                                velocity=0, channel=channel))
+                    except Exception:
+                        pass
+
+                off = threading.Timer(gate, note_off)
+                off.daemon = True
+                off.start()
             except Exception:
                 pass
 
-        timer = threading.Timer(gate, note_off)
-        timer.daemon = True
-        timer.start()
+        if delay < 0.002:
+            fire_on()
+        else:
+            timer = threading.Timer(delay, fire_on)
+            timer.daemon = True
+            timer.start()
 
     @objc.python_method
     def _arp_loop(self):
@@ -1470,7 +1694,7 @@ class OrchidController(NSObject):
                     return
                 continue
             rate = max(self.arp_rate_ms, 30) / 1000.0
-            self._arp_step(rate * 0.6)
+            self._arp_step(rate * self.arp_gate)
             if self._arp_stop.wait(rate):
                 return
 
@@ -1490,12 +1714,12 @@ class OrchidController(NSObject):
                 if self._tick_count % ticks == 0 and self.arp_on:
                     dt = (sum(self._tick_dts) / len(self._tick_dts)
                           if self._tick_dts else self.arp_rate_ms / 1000.0 / 12)
-                    self._arp_step(ticks * dt * 0.6)
+                    self._arp_step(ticks * dt * self.arp_gate)
                 if self._tick_count % 24 == 0 and self._tick_dts:
                     bpm = 60.0 / (24 * sum(self._tick_dts)
                                   / len(self._tick_dts))
                     AppHelper.callAfter(
-                        self.tempo_value.setStringValue_,
+                        self.tempo_drag.set_override,
                         "\u2248%d bpm" % round(bpm))
             elif msg.type == "start":
                 self._tick_count = -1     # next clock lands on the downbeat
