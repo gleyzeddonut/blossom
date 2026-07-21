@@ -2,10 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key><string>Orchid</string>
-    <key>CFBundleIdentifier</key><string>local.orchid</string>
+    <key>CFBundleName</key><string>Blossom</string>
+    <key>CFBundleIdentifier</key><string>local.blossom</string>
     <key>CFBundleVersion</key><string>1.0</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleExecutable</key><string>orchid</string>
+    <key>CFBundleExecutable</key><string>blossom</string>
+    <key>CFBundleIconFile</key><string>blossom.icns</string>
 </dict>
 </plist>

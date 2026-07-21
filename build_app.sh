@@ -4,11 +4,11 @@
 # or the launcher script.
 set -e
 cd "$(dirname "$0")"
-RES=Orchid.app/Contents/Resources
+RES=Blossom.app/Contents/Resources
 mkdir -p "$RES"
-cp gui.py chords.py settings.py update.py requirements.txt VERSION "$RES/"
-chmod +x Orchid.app/Contents/MacOS/orchid
+cp gui.py chords.py settings.py update.py requirements.txt VERSION blossom.icns "$RES/"
+chmod +x Blossom.app/Contents/MacOS/blossom
 ID="$(security find-identity -v -p codesigning 2>/dev/null \
       | awk -F'"' '/Developer ID Application/ {print $2; exit}')"
-codesign --force --deep -s "${ID:--}" Orchid.app
-echo "Built and signed Orchid.app${ID:+ ($ID)}"
+codesign --force --deep -s "${ID:--}" Blossom.app
+echo "Built and signed Blossom.app${ID:+ ($ID)}"

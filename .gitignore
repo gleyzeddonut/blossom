@@ -1,6 +1,6 @@
 .venv/
 __pycache__/
 .pytest_cache/
-Orchid.app/Contents/_CodeSignature/
-Orchid.app/Contents/Resources/
+Blossom.app/Contents/_CodeSignature/
+Blossom.app/Contents/Resources/
 .DS_Store

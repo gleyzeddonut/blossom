@@ -3,11 +3,11 @@
 import urllib.request
 from pathlib import Path
 
-OWNER, REPO, BRANCH = "gleyzeddonut", "orchid", "main"
+OWNER, REPO, BRANCH = "gleyzeddonut", "blossom", "main"
 RAW_BASE = "https://raw.githubusercontent.com/%s/%s/%s/" % (OWNER, REPO, BRANCH)
 APP_FILES = ("gui.py", "chords.py", "settings.py", "update.py",
              "requirements.txt", "VERSION")
-UPDATE_DIR = Path.home() / "Library" / "Application Support" / "Orchid" / "app"
+UPDATE_DIR = Path.home() / "Library" / "Application Support" / "Blossom" / "app"
 TIMEOUT = 10
 
 

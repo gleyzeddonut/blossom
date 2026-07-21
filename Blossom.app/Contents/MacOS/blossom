@@ -1,9 +1,14 @@
 #!/bin/bash
-# Orchid launcher: fully self-contained. Code lives in Contents/Resources;
-# the Python environment and settings live in ~/Library/Application Support/Orchid.
-LOG=/tmp/orchid-launch.log
+# Blossom launcher: fully self-contained. Code lives in Contents/Resources;
+# the Python environment and settings live in ~/Library/Application Support/Blossom.
+LOG=/tmp/blossom-launch.log
 RES="$(cd "$(dirname "$0")/../Resources" && pwd)"
-APPDIR="$HOME/Library/Application Support/Orchid"
+APPDIR="$HOME/Library/Application Support/Blossom"
+# One-time migration from the app's previous name.
+OLDDIR="$HOME/Library/Application Support/Orchid"
+if [ -d "$OLDDIR" ] && [ ! -d "$APPDIR" ]; then
+    mv "$OLDDIR" "$APPDIR"
+fi
 VENV="$APPDIR/venv"
 LOCAL_PY="$APPDIR/python/bin/python3"
 
@@ -34,10 +39,10 @@ probe() {
     return 1
 }
 
-alert() { osascript -e "display alert \"Orchid\" message \"$1\""; }
+alert() { osascript -e "display alert \"Blossom\" message \"$1\""; }
 
 download_python() {
-    osascript -e 'display notification "First launch: downloading Python runtime…" with title "Orchid"' 2>/dev/null
+    osascript -e 'display notification "First launch: downloading Python runtime…" with title "Blossom"' 2>/dev/null
     echo "downloading $PY_URL" >>"$LOG"
     mkdir -p "$APPDIR"
     curl -fsSL --retry 2 -o "$APPDIR/python.tar.gz" "$PY_URL" >>"$LOG" 2>&1 || return 1
@@ -64,9 +69,9 @@ if ! "$VENV/bin/python" -c "import mido, rtmidi, AppKit" >>"$LOG" 2>&1; then
     fi
     if [ -z "$PY" ]; then
         if [ "$BLOCKED" = 1 ]; then
-            alert "macOS is blocking Orchid from reading files it needs. Details: $LOG"
+            alert "macOS is blocking Blossom from reading files it needs. Details: $LOG"
         else
-            alert "Orchid could not find or download a Python runtime. Check your internet connection and try again. Details: $LOG"
+            alert "Blossom could not find or download a Python runtime. Check your internet connection and try again. Details: $LOG"
         fi
         exit 1
     fi
@@ -75,7 +80,7 @@ if ! "$VENV/bin/python" -c "import mido, rtmidi, AppKit" >>"$LOG" 2>&1; then
     "$PY" -m venv "$VENV" >>"$LOG" 2>&1
     "$VENV/bin/python" -m pip install -r "$RES/requirements.txt" >>"$LOG" 2>&1
     if ! "$VENV/bin/python" -c "import mido, rtmidi, AppKit" >>"$LOG" 2>&1; then
-        alert "Orchid could not set up its Python environment. Details: $LOG"
+        alert "Blossom could not set up its Python environment. Details: $LOG"
         exit 1
     fi
 fi

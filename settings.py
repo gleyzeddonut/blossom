@@ -3,9 +3,13 @@
 import json
 from pathlib import Path
 
-SETTINGS_PATH = (Path.home() / "Library" / "Application Support" / "Orchid"
+SETTINGS_PATH = (Path.home() / "Library" / "Application Support" / "Blossom"
                  / "settings.json")
-DEFAULTS = {"in_port": "", "out_port": "", "base": 36, "channel": 1}
+DEFAULTS = {"in_port": "", "out_port": "", "base": 36, "channel": 1,
+            "key": "Off", "spread": False, "strum": 0, "mono": False,
+            "offkey": "V7", "voicing": "1-3-5", "voice_lead": True, "humanize": 0, "arp": False, "tempo": 120, "arp_div": "1/8", "clock_port": "Off", "sync_on": False,
+            "chord_keys": ["major", "maj7", "minor", "min7", "dom7", "add9",
+                           "sus4", "13", "halfdim", "dim", "aug", "\u2014"]}
 
 
 def load(path=SETTINGS_PATH):

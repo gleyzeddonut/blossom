@@ -15,7 +15,11 @@ def test_load_corrupt_file_returns_defaults(tmp_path):
 
 def test_save_load_roundtrip(tmp_path):
     path = tmp_path / "settings.json"
-    data = {"in_port": "KeyStep", "out_port": "USB MIDI", "base": 48, "channel": 3}
+    data = {"in_port": "KeyStep", "out_port": "USB MIDI", "base": 48,
+            "channel": 3, "key": "D", "spread": True, "strum": 40,
+            "mono": True, "offkey": "snap", "voicing": "smart", "voice_lead": False, "humanize": 12, "arp": True,
+            "tempo": 100, "arp_div": "1/16", "clock_port": "IAC Bus 1",
+            "chord_keys": ["dim"] * 12, "sync_on": True}
     settings.save(data, path)
     assert settings.load(path) == data
 
@@ -36,4 +40,4 @@ def test_save_creates_missing_parent_directories(tmp_path):
 
 
 def test_default_path_is_in_application_support():
-    assert "Application Support/Orchid" in str(settings.SETTINGS_PATH)
+    assert "Application Support/Blossom" in str(settings.SETTINGS_PATH)
