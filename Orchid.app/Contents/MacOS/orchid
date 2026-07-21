@@ -5,6 +5,17 @@ LOG=/tmp/orchid-launch.log
 RES="$(cd "$(dirname "$0")/../Resources" && pwd)"
 APPDIR="$HOME/Library/Application Support/Orchid"
 VENV="$APPDIR/venv"
+LOCAL_PY="$APPDIR/python/bin/python3"
+
+# Standalone CPython download, used when the machine has no usable Python
+# (newest macOS no longer ships one with the Command Line Tools).
+PBS_TAG="20260718"
+PBS_VER="cpython-3.12.13"
+case "$(uname -m)" in
+    arm64) PBS_ARCH="aarch64" ;;
+    *)     PBS_ARCH="x86_64" ;;
+esac
+PY_URL="https://github.com/astral-sh/python-build-standalone/releases/download/${PBS_TAG}/${PBS_VER}+${PBS_TAG}-${PBS_ARCH}-apple-darwin-install_only.tar.gz"
 
 {
     echo "=== launch $(date) ==="
@@ -25,20 +36,37 @@ probe() {
 
 alert() { osascript -e "display alert \"Orchid\" message \"$1\""; }
 
+download_python() {
+    osascript -e 'display notification "First launch: downloading Python runtime…" with title "Orchid"' 2>/dev/null
+    echo "downloading $PY_URL" >>"$LOG"
+    mkdir -p "$APPDIR"
+    curl -fsSL --retry 2 -o "$APPDIR/python.tar.gz" "$PY_URL" >>"$LOG" 2>&1 || return 1
+    rm -rf "$APPDIR/python"
+    tar -xzf "$APPDIR/python.tar.gz" -C "$APPDIR" >>"$LOG" 2>&1 || return 1
+    rm -f "$APPDIR/python.tar.gz"
+    [ -x "$LOCAL_PY" ]
+}
+
 if ! "$VENV/bin/python" -c "import mido, rtmidi, AppKit" >>"$LOG" 2>&1; then
     echo "venv unusable; (re)building" >>"$LOG"
     PY=""
-    for p in /usr/bin/python3 "$(command -v python3 2>/dev/null)"; do
+    for p in "$LOCAL_PY" /usr/bin/python3 "$(command -v python3 2>/dev/null)"; do
         if [ -n "$p" ] && [ -x "$p" ] && probe "$p"; then
             PY="$p"
             break
         fi
     done
+    if [ -z "$PY" ] && [ "$BLOCKED" != 1 ]; then
+        # No Python on this machine — fetch our own standalone runtime.
+        if download_python; then
+            PY="$LOCAL_PY"
+        fi
+    fi
     if [ -z "$PY" ]; then
         if [ "$BLOCKED" = 1 ]; then
             alert "macOS is blocking Orchid from reading files it needs. Details: $LOG"
         else
-            alert "No usable Python 3 found. Install the Xcode Command Line Tools (run: xcode-select --install) and try again. Details: $LOG"
+            alert "Orchid could not find or download a Python runtime. Check your internet connection and try again. Details: $LOG"
         fi
         exit 1
     fi
