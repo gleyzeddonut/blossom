@@ -8,7 +8,7 @@ SETTINGS_PATH = (Path.home() / "Library" / "Application Support" / "Blossom"
 DEFAULTS = {"in_port": "", "out_port": "", "base": 36, "channel": 1,
             "key": "Off", "spread": False, "strum": 0, "mono": False,
             "offkey": "V7", "voicing": "1-3-5", "voice_lead": True, "humanize": 0, "arp": False, "tempo": 120, "arp_div": "1/8", "arp_pattern": "up", "arp_oct": 1, "arp_gate": 60,
-            "mode": "major", "clock_port": "Off", "sync_on": False,
+            "mode": "major", "clock_port": "Off", "sync_on": False, "float_on_top": False,
             "chord_keys": ["major", "maj7", "minor", "min7", "dom7", "add9",
                            "sus4", "13", "halfdim", "dim", "aug", "\u2014"]}
 

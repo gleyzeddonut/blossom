@@ -1293,6 +1293,8 @@ class OrchidController(NSObject):
         self.lead_check.setState_(0 if stored.get("voice_lead") is False else 1)
         self._apply_arp_dim()
         self._set_zone_display(stored["base"])
+        if stored.get("float_on_top"):
+            self.window.setLevel_(3)            # NSFloatingWindowLevel
         self.refreshPorts_(None)
         if stored.get("clock_port") in list(self.clock_pop.itemTitles()):
             self.clock_pop.selectItemWithTitle_(stored["clock_port"])
@@ -1840,13 +1842,21 @@ class OrchidController(NSObject):
     def _build_settings_window(self):
         style = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
         win = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
-            NSMakeRect(0, 0, 320, 150), style, NSBackingStoreBuffered, False)
+            NSMakeRect(0, 0, 320, 186), style, NSBackingStoreBuffered, False)
         win.setTitle_("Blossom Settings")
         win.center()
         win.setReleasedWhenClosed_(False)
         content = win.contentView()
         content.addSubview_(_label("Blossom version %s" % update.local_version(),
-                                   NSMakeRect(20, 104, 280, 20)))
+                                   NSMakeRect(20, 140, 280, 20)))
+        content.addSubview_(_label("Keep above other windows",
+                                   NSMakeRect(20, 112, 220, 18)))
+        self.float_check = PillSwitch.alloc().initWithFrame_(
+            NSMakeRect(250, 108, 50, 24))
+        self.float_check.setState_(
+            1 if settings.load().get("float_on_top") else 0)
+        self.float_check.on_change = self.floatChanged_
+        content.addSubview_(self.float_check)
         self.update_status = _label("", NSMakeRect(20, 74, 280, 20))
         content.addSubview_(self.update_status)
         self.update_btn = NSButton.alloc().initWithFrame_(NSMakeRect(20, 28, 280, 32))
@@ -1857,6 +1867,13 @@ class OrchidController(NSObject):
         self.update_btn.setHidden_(True)
         content.addSubview_(self.update_btn)
         self.settings_window = win
+
+    def floatChanged_(self, sender):
+        on = bool(sender.state())
+        self.window.setLevel_(3 if on else 0)   # NSFloatingWindowLevel
+        stored = settings.load()
+        stored["float_on_top"] = on
+        settings.save(stored)
 
     @objc.python_method
     def _check_for_update(self):

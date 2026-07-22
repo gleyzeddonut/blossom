@@ -20,7 +20,7 @@ def test_save_load_roundtrip(tmp_path):
             "mono": True, "offkey": "snap", "voicing": "smart", "voice_lead": False, "humanize": 12, "arp": True,
             "tempo": 100, "arp_div": "1/16", "arp_pattern": "updn",
             "arp_oct": 2, "arp_gate": 45, "mode": "minor", "clock_port": "IAC Bus 1",
-            "chord_keys": ["dim"] * 12, "sync_on": True}
+            "chord_keys": ["dim"] * 12, "sync_on": True, "float_on_top": True}
     settings.save(data, path)
     assert settings.load(path) == data
 
